@@ -1,0 +1,14 @@
+.{
+    .name = .c8,
+    .version = "0.1.0",
+    .dependencies = .{
+        .vaxis = .{
+            .url = "git+https://github.com/rockorager/libvaxis.git#ae71b6545c099e73d45df7e5dd7c7a3081839468",
+            .hash = "vaxis-0.1.0-BWNV_JEMCQBskZQsnlzh6GoyHSDgOi41bCoZIB2pW-E7",
+        },
+    },
+    .fingerprint = 0x270b92059ea38d11,
+    .paths = .{
+        "src/",
+    },
+}
