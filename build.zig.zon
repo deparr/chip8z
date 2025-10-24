@@ -3,8 +3,12 @@
     .version = "0.1.0",
     .dependencies = .{
         .vaxis = .{
-            .url = "git+https://github.com/rockorager/libvaxis.git#ae71b6545c099e73d45df7e5dd7c7a3081839468",
-            .hash = "vaxis-0.1.0-BWNV_JEMCQBskZQsnlzh6GoyHSDgOi41bCoZIB2pW-E7",
+            .url = "git+https://github.com/rockorager/libvaxis.git#7dbb9fd3122e4ffad262dd7c151d80d863b68558",
+            .hash = "vaxis-0.5.1-BWNV_LosCQAGmCCNOLljCIw6j6-yt53tji6n6rwJ2BhS",
+        },
+        .sdl = .{
+            .url = "git+https://github.com/castholm/SDL.git#1d4b8dcc03bd216712b55318b4ad2402b5511490",
+            .hash = "sdl-0.3.1+3.2.24-7uIn9L9AfwFQf90JcTh3Slw__ZA8SEomk6fQI9F8ItY0",
         },
     },
     .fingerprint = 0x270b92059ea38d11,

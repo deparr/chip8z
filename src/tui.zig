@@ -16,10 +16,11 @@ const Model = struct {
 
     fn typeErasedEventHandler(ptr: *anyopaque, ctx: *vxfw.EventContext, event: vxfw.Event) anyerror!void {
         const self: *Model = @ptrCast(@alignCast(ptr));
+        _ = self;
         switch (event) {
             .init => {},
             .key_press => |key| {
-                if (key.matches('c', .{ .ctrl = true }) or key.matches(key.escape, .{})) {
+                if (key.matches('c', .{ .ctrl = true }) or key.matches(vaxis.Key.escape, .{})) {
                     ctx.quit = true;
                     return;
                 }
@@ -41,40 +42,40 @@ const Model = struct {
 };
 
 pub fn main() !void {
-    var gpa: std.heap.GeneralPurposeAllocator(.{}) = .init;
+    var gpa: std.heap.DebugAllocator(.{}) = .init;
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
-    const comp = try Chip8.init(allocator);
-    defer comp.deinit(allocator);
 
     var rom_buf: [4096]u8 = undefined;
-    const rom_file = try std.fs.cwd().openFile("roms/pong2.c8", .{});
-    const rom_len = try rom_file.readAll(&rom_buf);
-    rom_file.close();
-    comp.loadRom(rom_buf[0..rom_len]);
+    const rom_file = try std.fs.cwd().readFile("roms/keys.c8", &rom_buf);
 
-    var app = try vxfw.App.init(allocator);
-    defer app.deinit();
+    const comp = try Chip8.initWithRom(allocator, rom_file);
+    defer comp.deinit(allocator);
 
-    const model = try allocator.create(Model);
-    defer allocator.destroy(model);
-    model.* = .{
-        .comp = comp,
-    };
-
-    try app.run(model.widget(), .{});
-
-    // comp.status = .run;
-    // std.debug.print("{}\n", .{comp});
-    // while (comp.status == .run) {
-    //     try comp.step();
+    // var app = try vxfw.App.init(allocator);
+    // defer app.deinit();
     //
-    //     if (comp.draw)
-    //         debug_draw(comp.gfx);
+    // const model = try allocator.create(Model);
+    // defer allocator.destroy(model);
+    // model.* = .{
+    //     .comp = comp,
+    // };
     //
-    //     std.Thread.sleep(1_000_000_000 / 60);
-    // }
-    // std.debug.print("{}\n", .{comp});
+    // try app.run(model.widget(), .{});
+    //
+    comp.status = .run;
+    std.debug.print("{f}\n", .{comp});
+    while (comp.status == .run) {
+        try comp.step();
+
+        if (comp.draw) {
+            debug_draw(comp.gfx);
+            comp.draw = false;
+        }
+
+        std.Thread.sleep(1_000_000_000 / 60);
+    }
+    std.debug.print("{f}\n", .{comp});
 }
 
 fn debug_draw(gfx: []u8) void {

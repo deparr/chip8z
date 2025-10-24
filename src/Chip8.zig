@@ -53,16 +53,15 @@ status: enum {
     run,
     @"error",
 } = .init,
+rand: std.Random.DefaultPrng,
 
 pub fn init(allocator: std.mem.Allocator) std.mem.Allocator.Error!*Chip8 {
     var comp = try allocator.create(Chip8);
     comp.* = .{
         .mem = try allocator.alloc(u8, mem_size),
         .gfx = try allocator.alloc(u8, gfx_width * gfx_height),
+        .rand = .init(0x234e234234),
     };
-    // comp.cpu = .{};
-    // comp.mem = try allocator.alloc(u8, mem_size);
-    // comp.gfx = try allocator.alloc(u8, gfx_width * gfx_height);
 
     @memset(comp.mem, 0);
     @memcpy(comp.mem.ptr, &c8_font);
@@ -91,6 +90,19 @@ pub fn loadRom(self: *const Chip8, rom: []const u8) void {
 
 fn getKey(self: *const Chip8, key: u8) bool {
     return (self.keys & (@as(u16, 1) << @truncate(key))) > 0;
+}
+
+pub fn keyUp(self: *Chip8, key: u4) void {
+    self.keys |= @as(u16, 1) << key;
+}
+
+pub fn keyDown(self: *Chip8, key: u4) void {
+    self.keys &= ~(@as(u16, 1) << key);
+}
+
+pub fn decrementTimers(self: *Chip8) void {
+    self.delay_timer -|= 1;
+    self.sound_timer -|= 1;
 }
 
 const Addr = u12;
@@ -243,8 +255,9 @@ pub fn step(self: *Chip8) C8StepError!void {
         },
 
         .index => |addr| self.cpu.i = addr,
-        .rand => |_| return C8StepError.UnimplementedOpCode,
-
+        .rand => |reg| {
+            self.cpu.regs[reg.x] = @as(u8, @truncate(self.rand.next())) & reg.nn;
+        },
         .draw => |op| {
             self.cpu.regs[0xF] = 0;
             const vx = self.cpu.regs[op.x];
@@ -410,19 +423,14 @@ test "opcode_packed_structs" {
 
 pub fn format(
     self: *Chip8,
-    comptime fmt: []const u8,
-    options: std.fmt.FormatOptions,
-    writer: anytype,
+    writer: *std.Io.Writer,
 ) !void {
-    _ = fmt;
-    _ = options;
-
     try writer.print(
         \\Chip8{{
-        \\ status: .{s},
+        \\ status: .{t},
         \\ pc: 0x{x:04},
         \\ cycles: 0x{d:04},
-        \\ regs: {x:02},
+        \\ regs: {any},
         \\}}
-    , .{ @tagName(self.status), self.cpu.pc, self.cycles, self.cpu.regs });
+    , .{ self.status, self.cpu.pc, self.cycles, self.cpu.regs });
 }
