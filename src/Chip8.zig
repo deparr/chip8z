@@ -70,6 +70,22 @@ pub fn init(allocator: std.mem.Allocator) std.mem.Allocator.Error!*Chip8 {
     return comp;
 }
 
+pub fn reset(self: *Chip8, rom: []const u8) void {
+    self.delay_timer = 0;
+    self.sound_timer = 0;
+    self.keys = 0;
+    self.cycles = 0;
+    self.status = .run;
+    self.cpu = .{};
+
+    @memset(self.mem, 0);
+    @memcpy(self.mem.ptr, &c8_font);
+    @memset(self.gfx, 0);
+    @memset(&self.cpu.regs, 0);
+
+    self.loadRom(rom);
+}
+
 pub fn initWithRom(allocator: std.mem.Allocator, rom: []const u8) std.mem.Allocator.Error!*Chip8 {
     var comp = try init(allocator);
     comp.loadRom(rom);
@@ -292,7 +308,7 @@ pub fn step(self: *Chip8) C8StepError!void {
 
         .key_wait => |reg| {
             var i: u4 = 0;
-            const got_key = blk: while (i <= 15) : (i += 1) {
+            const got_key = blk: while (i < 15) : (i += 1) {
                 if ((self.keys & (@as(u16, 1) << i)) > 0) {
                     self.cpu.regs[reg] = i;
                     break :blk true;
@@ -315,7 +331,7 @@ pub fn step(self: *Chip8) C8StepError!void {
         .reg_dump => |to| {
             std.debug.assert(self.cpu.i + to + 1 < self.mem.len);
             var addr = self.cpu.i;
-            for (0..to + 1) |reg| {
+            for (0..@as(usize, to) + 1) |reg| {
                 self.mem[addr] = self.cpu.regs[reg];
                 addr += 1;
             }
@@ -323,7 +339,7 @@ pub fn step(self: *Chip8) C8StepError!void {
         .reg_load => |to| {
             std.debug.assert(self.cpu.i + to + 1 < self.mem.len);
             var addr = self.cpu.i;
-            for (0..to + 1) |reg| {
+            for (0..@as(usize, to) + 1) |reg| {
                 self.cpu.regs[reg] = self.mem[addr];
                 addr += 1;
             }
