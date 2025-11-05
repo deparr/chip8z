@@ -3,8 +3,8 @@ const usage =
     \\  c8 [options] rom_file
     \\
     \\Options:
-    \\--fg=<string>               RGB color for foreground (#ffffff)
-    \\--bg=<string>               RGB color for background (#000000)
+    \\--fg=<string>               RGB color for foreground (ff9900)
+    \\--bg=<string>               RGB color for background (000000)
     \\--tickrate=<number>         How many emulator steps to run per tick (32)
     \\
 ;
@@ -25,7 +25,7 @@ fn parseArgs(gpa: std.mem.Allocator) !Options {
     defer args.deinit();
     _ = args.next();
     var rom_file: ?[]const u8 = null;
-    var fg_color: SDL.Color = SDL.Color.parse("ffffff") catch unreachable;
+    var fg_color: SDL.Color = SDL.Color.parse("ff9900") catch unreachable;
     var bg_color: SDL.Color = SDL.Color.parse("000000") catch unreachable;
     var tickrate: u16 = 32;
 
@@ -115,6 +115,18 @@ pub fn main() !void {
     var renderer = try SDL.createRenderer(window, null, .{ .accelerated = true });
     defer renderer.destroy();
 
+    var beep = SquareWave{ .phase = 0.0, .freq = 440.0, .sample_rate = 48000.0, .on = false };
+    var audio_dev = try SDL.openAudioDevice(.{
+        .desired_spec = .{
+            .channel_count = 1,
+            .sample_rate = 48000,
+            .callback = &audio_callback,
+            .userdata = &beep,
+        },
+    });
+    std.debug.print("{any}\n", .{ audio_dev });
+    audio_dev.device.pause(false);
+
     const tex_h = win_height / 32;
     const tex_w = win_width / 64;
     var render_rect = SDL.Rectangle{ .width = tex_w, .height = tex_h };
@@ -179,6 +191,12 @@ pub fn main() !void {
                 comp.draw = false;
                 renderer.present();
             }
+
+            if (comp.sound_timer > 0) {
+                beep.on = true;
+            } else {
+                beep.on = false;
+            }
         }
 
         std.Thread.sleep(std.time.ns_per_s / 60);
@@ -219,6 +237,29 @@ fn handle_key(comp: *Chip8, key: SDL.KeyboardEvent) void {
 fn eql(a: []const u8, b: []const u8) bool {
     return std.mem.eql(u8, a, b);
 }
+
+
+fn audio_callback(userdata: ?*anyopaque, stream: [*c]u8, len: c_int) callconv(.c) void {
+    if (userdata == null)
+        return;
+    var wave: *SquareWave = @ptrCast(@alignCast(userdata));
+    var i16_stream:[*c]i16 = @ptrCast(@alignCast(stream));
+    const i16_len = @divTrunc(len, 2);
+
+    for (0..@intCast(i16_len)) |sample| {
+        const period = wave.sample_rate / wave.freq;
+        const val: i16 = if (wave.on) if (@mod(wave.phase, period) < period / 2) 2000 else -2000  else 0;
+        i16_stream[sample] = val;
+        wave.phase += 1.0;
+    }
+}
+
+const SquareWave = struct {
+    phase: f64,
+    freq: f64,
+    sample_rate: f64,
+    on: bool,
+};
 
 const std = @import("std");
 const SDL = @import("sdl2");
