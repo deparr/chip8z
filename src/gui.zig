@@ -27,7 +27,7 @@ fn parseArgs(gpa: std.mem.Allocator) !Options {
     var rom_file: ?[]const u8 = null;
     var fg_color: SDL.Color = SDL.Color.parse("ffffff") catch unreachable;
     var bg_color: SDL.Color = SDL.Color.parse("000000") catch unreachable;
-    var tickrate: u16 = 40;
+    var tickrate: u16 = 32;
 
     while (args.next()) |arg| {
         if (eql(arg, "-h") or eql(arg, "--help")) {
@@ -119,13 +119,9 @@ pub fn main() !void {
     const tex_w = win_width / 64;
     var render_rect = SDL.Rectangle{ .width = tex_w, .height = tex_h };
 
-    const fg_tex = try createTexture(renderer, opts.fg_color, tex_w, tex_h);
-    defer fg_tex.destroy();
-    const bg_tex = try createTexture(renderer, opts.bg_color, tex_w, tex_h);
-    defer bg_tex.destroy();
-
     var paused = false;
     comp.status = .run;
+    var prev_time: i64 = 0;
     mainLoop: while (comp.status == .run) {
         while (SDL.pollEvent()) |ev| {
             switch (ev) {
@@ -144,8 +140,10 @@ pub fn main() !void {
                                 std.log.info("{f}", .{comp});
                         },
                         .u => {
-                            comp.reset(rom);
-                            std.log.info("reset", .{});
+                            if (key.key_state == .released and !key.is_repeat) {
+                                comp.reset(rom);
+                                std.log.info("reset", .{});
+                            }
                         },
                         else => {
                             if (!key.is_repeat) {
@@ -160,18 +158,22 @@ pub fn main() !void {
 
         if (!paused) {
             for (0..opts.tickrate) |_| {
+                const current_time = std.time.milliTimestamp();
                 if (comp.draw) break;
 
                 try comp.step();
+                if (current_time - prev_time >= Chip8.clock_rate_ms) {
+                    comp.decrementTimers();
+                    prev_time = current_time;
+                }
             }
-
-            comp.decrementTimers();
 
             if (comp.draw) {
                 for (0..comp.gfx.len) |i| {
                     render_rect.y = @intCast((i / 64) * tex_h);
                     render_rect.x = @intCast((i % 64) * tex_w);
-                    try renderer.copy(if (comp.gfx[i] == 1) fg_tex else bg_tex, render_rect, null);
+                    try renderer.setColor(if (comp.gfx[i] == 1) opts.fg_color else opts.bg_color);
+                    try renderer.fillRect(render_rect);
                 }
 
                 comp.draw = false;
@@ -181,19 +183,6 @@ pub fn main() !void {
 
         std.Thread.sleep(std.time.ns_per_s / 60);
     }
-}
-
-fn createTexture(renderer: SDL.Renderer, color: SDL.Color, width: usize, height: usize) !SDL.Texture {
-    var tex = try SDL.createTexture(renderer, .rgb24, .streaming, width, height);
-    var p = try tex.lock(null);
-    var i: usize = 0;
-    while (i < p.stride * height) : (i += 3) {
-        p.pixels[i] = color.r;
-        p.pixels[i + 1] = color.g;
-        p.pixels[i + 2] = color.b;
-    }
-    p.release();
-    return tex;
 }
 
 fn handle_key(comp: *Chip8, key: SDL.KeyboardEvent) void {

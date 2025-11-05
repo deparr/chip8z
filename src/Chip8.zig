@@ -4,6 +4,7 @@ const Chip8 = @This();
 
 pub const gfx_width = 64;
 pub const gfx_height = 32;
+pub const clock_rate_ms: i64 = @intFromFloat((1.0 / 60.0) * 1000 + 0.5);
 const mem_size = std.math.maxInt(Addr);
 const program_offset = 512;
 const display_size = 256;
@@ -457,6 +458,16 @@ pub fn format(
         \\ cycles: 0x{d:04},
         \\ regs: {any},
         \\ keys: {b:016},
+        \\ delay: {d},
+        \\ sound: {d},
         \\}}
-    , .{ self.status, self.cpu.pc, self.cycles, self.cpu.regs, self.keys });
+    , .{
+        self.status,
+        self.cpu.pc,
+        self.cycles,
+        self.cpu.regs,
+        self.keys,
+        self.delay_timer,
+        self.sound_timer,
+    });
 }
