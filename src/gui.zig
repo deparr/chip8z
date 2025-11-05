@@ -18,61 +18,61 @@ const Options = struct {
     fn deinit(self: *const Options, gpa: std.mem.Allocator) void {
         gpa.free(self.rom_file);
     }
-};
 
-fn parseArgs(gpa: std.mem.Allocator) !Options {
-    var args = try std.process.argsWithAllocator(gpa);
-    defer args.deinit();
-    _ = args.next();
-    var rom_file: ?[]const u8 = null;
-    var fg_color: SDL.Color = SDL.Color.parse("ff9900") catch unreachable;
-    var bg_color: SDL.Color = SDL.Color.parse("000000") catch unreachable;
-    var tickrate: u16 = 32;
+    fn parseArgs(gpa: std.mem.Allocator) !Options {
+        var args = try std.process.argsWithAllocator(gpa);
+        defer args.deinit();
+        _ = args.next();
+        var rom_file: ?[]const u8 = null;
+        var fg_color: SDL.Color = SDL.Color.parse("ff9900") catch unreachable;
+        var bg_color: SDL.Color = SDL.Color.parse("000000") catch unreachable;
+        var tickrate: u16 = 32;
 
-    while (args.next()) |arg| {
-        if (eql(arg, "-h") or eql(arg, "--help")) {
-            var w = std.fs.File.stderr().writer(&.{});
-            w.interface.writeAll(usage) catch {};
-            std.process.exit(0);
-        }
-
-        if (std.mem.startsWith(u8, arg, "--")) {
-            var split = std.mem.splitScalar(u8, arg[2..], '=');
-            const option = split.first();
-            const value = split.rest();
-
-            if (eql(option, "fg")) {
-                const color = SDL.Color.parse(value) catch {
-                    std.debug.print("unable to parse {s} = '{s}' as SDL color defaulting to '{s}'\n", .{ "fg", value, "ffffff" });
-                    continue;
-                };
-                fg_color = color;
-            } else if (eql(option, "bg")) {
-                const color = SDL.Color.parse(value) catch {
-                    std.debug.print("unable to parse {s} = '{s}' as SDL color defaulting to '{s}'\n", .{ "bg", value, "000000" });
-                    continue;
-                };
-                bg_color = color;
-            } else if (eql(option, "tickrate")) {
-                const given_tickrate = std.fmt.parseInt(u16, value, 10) catch |err| {
-                    std.debug.print("{t}: unable to parse u16 from '{s}', defaulting to 32\n", .{ err, value });
-                    continue;
-                };
-
-                tickrate = given_tickrate;
+        while (args.next()) |arg| {
+            if (eql(arg, "-h") or eql(arg, "--help")) {
+                var w = std.fs.File.stderr().writer(&.{});
+                w.interface.writeAll(usage) catch {};
+                std.process.exit(0);
             }
-        } else {
-            rom_file = try gpa.dupe(u8, arg);
-        }
-    }
 
-    return .{
-        .rom_file = rom_file orelse return error.MissingRomFile,
-        .fg_color = fg_color,
-        .bg_color = bg_color,
-        .tickrate = tickrate,
-    };
-}
+            if (std.mem.startsWith(u8, arg, "--")) {
+                var split = std.mem.splitScalar(u8, arg[2..], '=');
+                const option = split.first();
+                const value = split.rest();
+
+                if (eql(option, "fg")) {
+                    const color = SDL.Color.parse(value) catch {
+                        std.debug.print("unable to parse {s} = '{s}' as SDL color defaulting to '{s}'\n", .{ "fg", value, "ffffff" });
+                        continue;
+                    };
+                    fg_color = color;
+                } else if (eql(option, "bg")) {
+                    const color = SDL.Color.parse(value) catch {
+                        std.debug.print("unable to parse {s} = '{s}' as SDL color defaulting to '{s}'\n", .{ "bg", value, "000000" });
+                        continue;
+                    };
+                    bg_color = color;
+                } else if (eql(option, "tickrate")) {
+                    const given_tickrate = std.fmt.parseInt(u16, value, 10) catch |err| {
+                        std.debug.print("{t}: unable to parse u16 from '{s}', defaulting to 32\n", .{ err, value });
+                        continue;
+                    };
+
+                    tickrate = given_tickrate;
+                }
+            } else {
+                rom_file = try gpa.dupe(u8, arg);
+            }
+        }
+
+        return .{
+            .rom_file = rom_file orelse return error.MissingRomFile,
+            .fg_color = fg_color,
+            .bg_color = bg_color,
+            .tickrate = tickrate,
+        };
+    }
+};
 
 pub fn main() !void {
     var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
@@ -84,7 +84,7 @@ pub fn main() !void {
         _ = debug_allocator.deinit();
     };
 
-    const opts = try parseArgs(gpa);
+    const opts: Options = try .parseArgs(gpa);
     defer opts.deinit(gpa);
 
     const rom = try std.fs.cwd().readFileAlloc(gpa, opts.rom_file, 1 << 16);
@@ -124,7 +124,7 @@ pub fn main() !void {
             .userdata = &beep,
         },
     });
-    std.debug.print("{any}\n", .{ audio_dev });
+    defer audio_dev.device.close();
     audio_dev.device.pause(false);
 
     const tex_h = win_height / 32;
@@ -238,17 +238,16 @@ fn eql(a: []const u8, b: []const u8) bool {
     return std.mem.eql(u8, a, b);
 }
 
-
 fn audio_callback(userdata: ?*anyopaque, stream: [*c]u8, len: c_int) callconv(.c) void {
     if (userdata == null)
         return;
     var wave: *SquareWave = @ptrCast(@alignCast(userdata));
-    var i16_stream:[*c]i16 = @ptrCast(@alignCast(stream));
+    var i16_stream: [*c]i16 = @ptrCast(@alignCast(stream));
     const i16_len = @divTrunc(len, 2);
 
     for (0..@intCast(i16_len)) |sample| {
         const period = wave.sample_rate / wave.freq;
-        const val: i16 = if (wave.on) if (@mod(wave.phase, period) < period / 2) 2000 else -2000  else 0;
+        const val: i16 = if (wave.on) if (@mod(wave.phase, period) < period / 2) 2000 else -2000 else 0;
         i16_stream[sample] = val;
         wave.phase += 1.0;
     }
