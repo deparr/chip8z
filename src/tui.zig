@@ -73,7 +73,7 @@ pub fn main() !void {
             comp.draw = false;
         }
 
-        std.Thread.sleep(1_000_000_000 / 60);
+        std.Thread.sleep(std.time.ns_per_s / 60);
     }
     std.debug.print("{f}\n", .{comp});
 }

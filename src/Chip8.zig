@@ -46,7 +46,6 @@ cycles: u32 = 0,
 delay_timer: u8 = 0,
 sound_timer: u8 = 0,
 draw: bool = false,
-skip: bool = false,
 status: enum {
     init,
     halt,
@@ -92,11 +91,11 @@ fn getKey(self: *const Chip8, key: u8) bool {
     return (self.keys & (@as(u16, 1) << @truncate(key))) > 0;
 }
 
-pub fn keyUp(self: *Chip8, key: u4) void {
+pub fn keyDown(self: *Chip8, key: u4) void {
     self.keys |= @as(u16, 1) << key;
 }
 
-pub fn keyDown(self: *Chip8, key: u4) void {
+pub fn keyUp(self: *Chip8, key: u4) void {
     self.keys &= ~(@as(u16, 1) << key);
 }
 
@@ -186,8 +185,14 @@ pub fn step(self: *Chip8) C8StepError!void {
     const opcode_raw: u16 = @as(u16, self.mem[pc]) << 8 | @as(u16, self.mem[pc + 1]);
     const opcode = try decode(opcode_raw);
     var next_pc: Addr = pc + 2;
+    var skip = false;
     switch (opcode) {
-        .native_call => return C8StepError.UnimplementedOpCode,
+        .native_call => |addr| {
+            self.mem[self.cpu.sp] = @truncate(next_pc);
+            self.mem[self.cpu.sp + 1] = @truncate((next_pc >> 8) & 0xf);
+            self.cpu.sp += 2;
+            next_pc = addr;
+        },
         .display_clear => {
             @memset(self.gfx, 0);
             self.draw = true;
@@ -208,10 +213,10 @@ pub fn step(self: *Chip8) C8StepError!void {
             next_pc = addr;
         },
 
-        .if_eq_imm => |op| self.skip = op.nn == self.cpu.regs[op.x],
-        .if_neq_imm => |op| self.skip = op.nn != self.cpu.regs[op.x],
-        .if_eq_reg => |op| self.skip = self.cpu.regs[op.x] == self.cpu.regs[op.y],
-        .if_neq_reg => |op| self.skip = self.cpu.regs[op.x] != self.cpu.regs[op.y],
+        .if_eq_imm => |op| skip = op.nn == self.cpu.regs[op.x],
+        .if_neq_imm => |op| skip = op.nn != self.cpu.regs[op.x],
+        .if_eq_reg => |op| skip = self.cpu.regs[op.x] == self.cpu.regs[op.y],
+        .if_neq_reg => |op| skip = self.cpu.regs[op.x] != self.cpu.regs[op.y],
         .mov_imm => |op| self.cpu.regs[op.x] = op.nn,
         .add_imm => |op| self.cpu.regs[op.x] +%= op.nn,
 
@@ -276,8 +281,8 @@ pub fn step(self: *Chip8) C8StepError!void {
             }
             self.draw = true;
         },
-        .if_eq_key => |reg| self.skip = self.getKey(self.cpu.regs[reg]),
-        .if_neq_key => |reg| self.skip = !self.getKey(self.cpu.regs[reg]),
+        .if_eq_key => |reg| skip = self.getKey(self.cpu.regs[reg]),
+        .if_neq_key => |reg| skip = !self.getKey(self.cpu.regs[reg]),
 
         .delay_get => |reg| self.cpu.regs[reg] = self.delay_timer,
         .delay_set => |reg| self.delay_timer = self.cpu.regs[reg],
@@ -285,7 +290,7 @@ pub fn step(self: *Chip8) C8StepError!void {
         .sprite_addr => |reg| self.cpu.i = @as(u12, self.cpu.regs[reg]) * 5,
         .index_add => |reg| self.cpu.i +|= self.cpu.regs[reg],
 
-        .key_wait => |reg|{
+        .key_wait => |reg| {
             var i: u4 = 0;
             const got_key = blk: while (i <= 15) : (i += 1) {
                 if ((self.keys & (@as(u16, 1) << i)) > 0) {
@@ -325,6 +330,10 @@ pub fn step(self: *Chip8) C8StepError!void {
         },
 
         .halt => self.status = .halt,
+    }
+
+    if (skip) {
+        next_pc += 2;
     }
 
     self.cycles +|= 1;
@@ -431,6 +440,7 @@ pub fn format(
         \\ pc: 0x{x:04},
         \\ cycles: 0x{d:04},
         \\ regs: {any},
+        \\ keys: {b:016},
         \\}}
-    , .{ self.status, self.cpu.pc, self.cycles, self.cpu.regs });
+    , .{ self.status, self.cpu.pc, self.cycles, self.cpu.regs, self.keys });
 }
